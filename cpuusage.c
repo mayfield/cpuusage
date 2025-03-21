@@ -14,7 +14,7 @@ struct stats {
     uint64_t nice;
     uint64_t system;
     uint64_t idle;
-    uint64_t _iowait; // ignore (see man 5 proc_stat)
+    uint64_t iowait;
     uint64_t irq;
     uint64_t softirq;
     uint64_t steal;
@@ -33,7 +33,7 @@ static void load_from_fd(int fd, struct stats *stats) {
         memset(stats, 0, sizeof(struct stats));
     } else {
         if (sscanf(buf, "cpu %lu %lu %lu %lu %lu %lu %lu %lu %lu %lu\n",
-            &stats->user, &stats->nice, &stats->system, &stats->idle, &stats->_iowait,
+            &stats->user, &stats->nice, &stats->system, &stats->idle, &stats->iowait,
             &stats->irq, &stats->softirq, &stats->steal, &stats->guest, &stats->guestnice) == -1) {
             fprintf(stderr, "Failed to parse cpu line [%d]: %s\n", fd, strerror(errno));
             exit(1);
@@ -45,7 +45,7 @@ static void load_from_fd(int fd, struct stats *stats) {
 static void store_to_fd(int fd, struct stats *stats) {
    char buf[4096] = {0};
     int r = snprintf(buf, sizeof(buf), "cpu %lu %lu %lu %lu %lu %lu %lu %lu %lu %lu\n",
-        stats->user, stats->nice, stats->system, stats->idle, stats->_iowait,
+        stats->user, stats->nice, stats->system, stats->idle, stats->iowait,
         stats->irq, stats->softirq, stats->steal, stats->guest, stats->guestnice);
     if (r < 0 || r >= sizeof(buf)) {
         fprintf(stderr, "Failed to build stats string: %s\n", strerror(errno));
@@ -64,7 +64,7 @@ static uint64_t get_busy(struct stats *s) {
 
 
 static uint64_t get_idle(struct stats *s) {
-    uint64_t idle = s->idle;
+    uint64_t idle = s->idle + s->iowait;
     return idle;
 }
 
