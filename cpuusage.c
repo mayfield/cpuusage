@@ -71,7 +71,7 @@ static uint64_t get_busy(struct stats *s) {
 
 
 static uint64_t get_idle(struct stats *s) {
-    return s->idle + s->iowait;
+    return s->idle + s->iowait + s->steal;
 }
 
 
