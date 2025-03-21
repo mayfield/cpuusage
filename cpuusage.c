@@ -9,6 +9,14 @@
 #include<time.h>
 
 
+// See: https://stackoverflow.com/questions/23367857/accurate-calculation-of-cpu-usage-given-in-percentage-in-linux
+// for details on how each of these should be accumulated.
+// In short:
+//  1. guest is a subset of user
+//  2. guestnice is a subset of nice
+//  3. system, irq & softirq are all considered system and should be added.
+//  4. idle and iowait are considered idle time and should be added
+//  5. steal is relevant only when inside a VM and the outer hyporvisor stole ticks from us.
 struct stats {
     uint64_t user;
     uint64_t nice;
@@ -58,14 +66,12 @@ static void store_to_fd(int fd, struct stats *stats) {
 
 
 static uint64_t get_busy(struct stats *s) {
-    uint64_t busy = s->user + s->nice + s->system + s->irq + s->softirq + s->steal + s->guest + s->guestnice;
-    return busy;
+    return s->user + s->nice + s->system + s->irq + s->softirq;
 }
 
 
 static uint64_t get_idle(struct stats *s) {
-    uint64_t idle = s->idle + s->iowait;
-    return idle;
+    return s->idle + s->iowait;
 }
 
 
