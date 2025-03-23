@@ -31,6 +31,14 @@ struct stats {
 };
 
 
+static void sleep_ms(unsigned long ms) {
+    struct timespec duration;
+    duration.tv_nsec = (ms % 1000) * 1000000;
+    duration.tv_sec = ms / 1000;
+    nanosleep(&duration, NULL);
+}
+
+
 static void load_from_fd(int fd, struct stats *stats) {
     char buf[4096] = {0};
     int r = read(fd, buf, sizeof(buf) - 1);
@@ -75,9 +83,56 @@ static uint64_t get_idle(struct stats *s) {
 }
 
 
+static double cpu_busy_pct(struct stats *cur, struct stats *prev) {
+    uint64_t cur_busy = get_busy(cur);
+    uint64_t cur_idle = get_idle(cur);
+    uint64_t prev_busy = get_busy(prev);
+    uint64_t prev_idle = get_idle(prev);
+    uint64_t d_busy = cur_busy - prev_busy;
+    uint64_t d_idle = cur_idle - prev_idle;
+    return (double) d_busy / (d_busy + d_idle);
+}
+
+
+static double cpu_hz() {
+    int fd = open("/sys/devices/system/cpu/possible", O_RDONLY);
+    if (fd == -1) {
+        fprintf(stderr, "Failed to open [/sys/devices/system/cpu/possible]: %s", strerror(errno));
+        exit(1);
+    }
+    char buf[4096] = {0};
+    if (read(fd, buf, sizeof(buf) - 1) == -1) {
+        fprintf(stderr, "Failed to read file: %s\n", strerror(errno));
+        exit(1);
+    }
+    int start, end;
+    if (sscanf(buf, "%d-%d", &start, &end) == -1) {
+        fprintf(stderr, "Failed to parse [/sys/devices/system/cpu/possible]: %s", strerror(errno));
+        exit(1);
+    }
+    double t = 0;
+    int count = 0;
+    sleep_ms(200);
+    for (int i = start; i <= end; i++) {
+        char fname[4096];
+        snprintf(fname, sizeof(fname), "/sys/devices/system/cpu/cpu%d/cpufreq/scaling_cur_freq", i);
+        int fd = open(fname, O_RDONLY);
+        sleep_ms(10);
+        if (read(fd, buf, sizeof(buf) - 1) == -1) {
+            fprintf(stderr, "Failed to read file: %s\n", strerror(errno));
+            continue;
+        }
+        long cpuspeed = strtol(buf, NULL, 10);
+        t += cpuspeed;
+        count++;
+    }
+    return t / count;
+}
+
+
 int main(int argc, char *argv[]) {
     if (argc < 2 || strcmp(argv[1], "--help") == 0) {
-        fprintf(stderr, "Usage: %s COOKIE_FILE\n", argv[0]);
+        fprintf(stderr, "Usage: %s COOKIE_FILE [--mhz]\n", argv[0]);
         return 1;
     }
     int fd = open("/proc/stat", O_RDONLY);
@@ -85,26 +140,22 @@ int main(int argc, char *argv[]) {
         fprintf(stderr, "Failed to open [/proc/stat]: %s", strerror(errno));
         return 1;
     }
-    struct stats c = {0};
-    load_from_fd(fd, &c);
-    close(fd);
+    struct stats cur = {0};
+    load_from_fd(fd, &cur);
     int cookie_fd = open(argv[1], O_RDWR | O_CREAT, 0600);
     if (cookie_fd == -1) {
         fprintf(stderr, "Failed to open cookie file [%s]: %s", argv[1], strerror(errno));
         return 1;
     }
-    lseek(cookie_fd, 0, SEEK_SET);
     struct stats prev = {0};
     load_from_fd(cookie_fd, &prev);
-    store_to_fd(cookie_fd, &c);
-    close(cookie_fd);
-    uint64_t cur_busy = get_busy(&c);
-    uint64_t cur_idle = get_idle(&c);
-    uint64_t prev_busy = get_busy(&prev);
-    uint64_t prev_idle = get_idle(&prev);
-    uint64_t d_busy = cur_busy - prev_busy;
-    uint64_t d_idle = cur_idle - prev_idle;
-    double usage = (double) d_busy / (d_busy + d_idle);
-    printf("%.1f%%\n", usage * 100.0);
+
+    if (argc > 2 && strcmp(argv[2], "--mhz") == 0) {
+        printf("%.2f Ghz, ", cpu_hz() / 1000000.0);
+    }
+
+    printf("%.1f﹪\n", cpu_busy_pct(&cur, &prev) * 100.0);
+
+    store_to_fd(cookie_fd, &cur);
     return 0;
 }
