@@ -1,12 +1,13 @@
 #define _GNU_SOURCE
-#include<stdint.h>
-#include<stdlib.h>
-#include<stdio.h>
-#include<fcntl.h>
-#include<unistd.h>
-#include<string.h>
-#include<errno.h>
-#include<time.h>
+#include <stdint.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <string.h>
+#include <errno.h>
+#include <time.h>
+#include <sys/sysinfo.h>
 
 
 // See: https://stackoverflow.com/questions/23367857/accurate-calculation-of-cpu-usage-given-in-percentage-in-linux
@@ -154,7 +155,7 @@ int main(int argc, char *argv[]) {
         printf("%.2f Ghz, ", cpu_hz() / 1000000.0);
     }
 
-    printf("%.1f﹪\n", cpu_busy_pct(&cur, &prev) * 100.0);
+    printf("%.1f﹪\n", cpu_busy_pct(&cur, &prev) * 100 * get_nprocs());
 
     store_to_fd(cookie_fd, &cur);
     return 0;
