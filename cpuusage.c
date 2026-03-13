@@ -155,7 +155,7 @@ int main(int argc, char *argv[]) {
         printf("%.2f Ghz, ", cpu_hz() / 1000000.0);
     }
 
-    printf("%.1f﹪\n", cpu_busy_pct(&cur, &prev) * 100 * get_nprocs());
+    printf("%.0f﹪\n", cpu_busy_pct(&cur, &prev) * 100 * get_nprocs());
 
     store_to_fd(cookie_fd, &cur);
     return 0;
